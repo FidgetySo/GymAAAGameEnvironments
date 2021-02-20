@@ -1,4 +1,5 @@
 #General Modules
+import sys
 import gym
 from gym import spaces
 import numpy as np
@@ -10,9 +11,7 @@ import scipy.interpolate
 #Screenshot Module
 import d3dshot
 d = d3dshot.create(capture_output="numpy")
-print(d.displays)
 d.display = d.displays[0]
-
 
 
 
@@ -23,9 +22,11 @@ import cv2
 
 import time
 
+
+
 #Object Dectection Code
-CONFIDENCE_THRESHOLD = 0.12
-NMS_THRESHOLD = 0.12
+CONFIDENCE_THRESHOLD = 0.16
+NMS_THRESHOLD = 0.28
 class_names = []
 with open("classes.txt", "r") as f:
     class_names = [cname.strip() for cname in f.readlines()]
@@ -51,12 +52,10 @@ def prediction(image):
 
 #Get Done Comparision Image
 org = cv2.imread("org.jpg").astype(np.uint8)
-
 pydirectinput.FAILSAFE = False
 
 import ctypes
 PUL = ctypes.POINTER(ctypes.c_ulong)
-
 class KeyBdInput(ctypes.Structure):
     _fields_ = [("wVk", ctypes.c_ushort),
                 ("wScan", ctypes.c_ushort),
@@ -88,8 +87,22 @@ class Input_I(ctypes.Union):
 class Input(ctypes.Structure):
     _fields_ = [("type", ctypes.c_ulong),
                 ("ii", Input_I)]
-def move(x=None, y=None, duration=0.005, absolute=False, interpolate=False, **kwargs):
 
+
+def left_click():
+    extra = ctypes.c_ulong(0)
+    ii_ = Input_I()
+    ii_.mi = MouseInput(0, 0, 0, 0x0002, 0, ctypes.pointer(extra))
+    x = Input(ctypes.c_ulong(0), ii_)
+    ctypes.windll.user32.SendInput(1, ctypes.pointer(x), ctypes.sizeof(x))
+    time.sleep(0.005)
+    extra = ctypes.c_ulong(0)
+    ii_ = Input_I()
+    ii_.mi = MouseInput(0, 0, 0, 0x0004, 0, ctypes.pointer(extra))
+    x = Input(ctypes.c_ulong(0), ii_)
+    ctypes.windll.user32.SendInput(1, ctypes.pointer(x), ctypes.sizeof(x))
+
+def move(x=None, y=None, duration=0.005, absolute=False, interpolate=False, **kwargs):
     if (interpolate):
         print("mouse move {}".format(interpolate))
         current_pixel_coordinates = win32api.GetCursorPos()
@@ -159,8 +172,17 @@ def crop_center(img,cropx,cropy):
     startx = x // 2 - (cropx // 2)
     starty = y // 2 - (cropy // 2)
     return img[starty:starty + cropy, starty:starty + cropy, :]
-
-def get_reward(image, frame, choice):
+reward_addition = 0
+def calc_reward_addition(done):
+    global reward_addition
+    if done:
+        reward_addition = 0
+        return 0
+    else:
+        reward_addition = reward_addition + 0.005
+        reward = min((0.01 + reward_addition), 1)
+        return reward
+def get_reward(image, frame, choice, done):
     reward = 0
     min_white=np.array([ 190, 190, 190])
     max_white=np.array([ 240, 240, 240])
@@ -168,107 +190,107 @@ def get_reward(image, frame, choice):
     health_dst=cv2.inRange(frame , min_white , max_white)
     number_health =cv2.countNonZero(health_dst)
     health = number_health / 157
+    health = health * 100
     try:
         previous_health = health
     except:
-        previous_health = 1.0
-    if health == 0:
-        reward -= 1.5
-    elif health < previous_health:
-        reward -= previous_health - health * 3.75
+        print("uh oh")
+        previous_health = 100.0
+    if health < previous_health:
+        reward -= min((previous_health - health), 20)
     elif previous_health == health:
-        reward -= 0.005
+        if done:
+            reward -= 50
+        if not done:
+            reward -= calc_reward_addition(done)
     #Crop to center of image to get if looking at enemy
-    center = crop_center(image, 8, 8)
-    min_blue=np.array([ 0, 255, 0])
-    max_blue=np.array([ 0, 255, 0])
+    center = crop_center(image, 24, 24)
+    min_blue=np.array([ 0, 240, 0])
+    max_blue=np.array([ 15, 255, 15])
     blue_dst=cv2.inRange(center , min_blue , max_blue)
     blue =cv2.countNonZero(blue_dst)
     choice_list = list(choice)
     action_2 = choice_list[1]
-    if blue >= 1 and action_2 == 1:
-        reward += 6
-        #print("Enemy hit")
-    elif action_2 == 1 and blue == 0:
-        reward -= .625
-    return reward
+    if blue >= 1 and action_2 == 0:
+        reward += 100 
+        print("Enemy hit")
+    elif action_2 == 0 and blue == 0:
+        reward -= 5
+    return reward, health
 def do_action(choice):
     #Make one scalar per action catergory of actions
     choice_list = list(choice)
     action_1 = choice_list[0]
     action_2 = choice_list[1]
     action_3 = choice_list[2]
-    
     #Mouse Actions
-    if action_1 == 1:
+    if action_1 == 0:
         move(x=20, y=0)
-    elif action_1 == 2:
+    elif action_1 == 1:
         move(x=-20, y=0)
-    elif action_1 == 3:
+    elif action_1 == 2:
         move(x=0, y=20)
-    elif action_1 == 4:
+    elif action_1 == 3:
         move(x=0, y=-20)
-    elif action_1 == 5:
+    elif action_1 == 4:
         pass
     
     #Shooting Actions
-    if action_2 == 1:
-        pydirectinput.mouseDown(button="left")
-        time.sleep(0.015)
-        pydirectinput.mouseUp(button="left")
-    elif action_2 == 2:
+    if action_2 == 0:
+        left_click()
+    elif action_2 == 1:
         pass
     #Movement actions
-    if action_3 == 1:
+    if action_3 == 0:
         pydirectinput.keyDown('shift')
+        time.sleep(0.005)
         pydirectinput.keyDown('w')
-    elif action_3 == 2:
+    elif action_3 == 1:
         pydirectinput.keyUp('shift')
+        time.sleep(0.005)
         pydirectinput.keyUp('w')
     elif action_3 == 2:
-        pydirectinput.keyDown('space')
-        time.sleep(0.015)
-        pydirectinput.keyUp('space')
-    elif action_3 == 4:
         pass
 class CustomEnv(gym.Env):
     def __init__(self):
         # Initialize Default Gym Varibles
         self.num_envs = 1
-        self.action_space = spaces.MultiDiscrete([ 5, 2, 4])
+        self.action_space = spaces.MultiDiscrete([ 5, 2, 3])
         self.observation_space = spaces.Box(low=0, high=255,
-                                        shape=(135, 240, 1), dtype=np.uint8)
+                                        shape=(90, 160, 1), dtype=np.uint8)
     def reset(self):
         # Reset Env/Get New Screenshot
         image = d.screenshot()
-        image = cv2.resize(image,(240, 135), interpolation = cv2.INTER_CUBIC).astype(np.uint8)   
+        image = cv2.resize(image.astype(np.uint8),(160, 90), interpolation = cv2.INTER_NEAREST) 
         image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        image = image.reshape((135, 240, 1))
+        image = np.reshape(image, (90,160, 1))
         return image
 
     def step(self, action):
         do_action(action)
         image = d.screenshot()
-        obs = cv2.resize(image,(320, 180), interpolation = cv2.INTER_CUBIC)
+        obs = cv2.resize(image.astype(np.uint8),(320, 180), interpolation = cv2.INTER_NEAREST)
         obs = prediction(obs)
             
         reward_frame = image[ 1001:1001 + 1 , 894:894 + 160 , : ]
-            
-        reward = get_reward(obs, reward_frame, action)
-        #Done Check via ssim score    
+        
         frame=image[ 0:0 + 38 , 0:0 + 93 , : ]
         s = measure.compare_ssim(org, frame, multichannel = True)
-        done = s == 1
+        done = s == 1    
+        
+        
+        reward, health = get_reward(obs, reward_frame, action, done)
+        #Done Check via ssim score    
         if done:
             # Press Space to start new roud/life
             pydirectinput.keyUp('space')
-            time.sleep(0.05)
+            time.sleep(0.03)
             pydirectinput.keyDown('space')
             time.sleep(1)
-        obs = cv2.resize(obs,(240, 135), interpolation = cv2.INTER_CUBIC).astype(np.uint8)
+        obs = cv2.resize(obs.astype(np.uint8),(160, 90), interpolation = cv2.INTER_NEAREST)
         obs = cv2.cvtColor(obs, cv2.COLOR_BGR2GRAY)
         # Reshape for network
-        obs = obs.reshape((135, 240, 1))
+        obs = np.reshape(obs, (90,160, 1))
         return obs, reward, done, {}
 
     def render(self, mode="human", close=False):
