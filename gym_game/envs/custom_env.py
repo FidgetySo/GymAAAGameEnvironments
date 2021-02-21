@@ -25,7 +25,7 @@ import time
 
 
 #Object Dectection Code
-CONFIDENCE_THRESHOLD = 0.16
+CONFIDENCE_THRESHOLD = 0.195
 NMS_THRESHOLD = 0.28
 class_names = []
 with open("classes.txt", "r") as f:
@@ -200,7 +200,7 @@ def get_reward(image, frame, choice, done):
         reward -= min((previous_health - health), 20)
     elif previous_health == health:
         if done:
-            reward -= 50
+            reward -= 75
         if not done:
             reward -= calc_reward_addition(done)
     #Crop to center of image to get if looking at enemy
@@ -257,13 +257,12 @@ class CustomEnv(gym.Env):
         self.num_envs = 1
         self.action_space = spaces.MultiDiscrete([ 5, 2, 3])
         self.observation_space = spaces.Box(low=0, high=255,
-                                        shape=(90, 160, 1), dtype=np.uint8)
+                                        shape=(45, 80, 3), dtype=np.uint8)
     def reset(self):
         # Reset Env/Get New Screenshot
         image = d.screenshot()
-        image = cv2.resize(image.astype(np.uint8),(160, 90), interpolation = cv2.INTER_NEAREST) 
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        image = np.reshape(image, (90,160, 1))
+        image = cv2.resize(image.astype(np.uint8),(80, 45), interpolation = cv2.INTER_NEAREST) 
+        #image = np.reshape(image, (45,80, 1))
         return image
 
     def step(self, action):
@@ -287,10 +286,9 @@ class CustomEnv(gym.Env):
             time.sleep(0.03)
             pydirectinput.keyDown('space')
             time.sleep(1)
-        obs = cv2.resize(obs.astype(np.uint8),(160, 90), interpolation = cv2.INTER_NEAREST)
-        obs = cv2.cvtColor(obs, cv2.COLOR_BGR2GRAY)
+        obs = cv2.resize(obs.astype(np.uint8),(80, 45), interpolation = cv2.INTER_NEAREST)
         # Reshape for network
-        obs = np.reshape(obs, (90,160, 1))
+        #obs = np.reshape(obs, (45,80, 1))
         return obs, reward, done, {}
 
     def render(self, mode="human", close=False):
