@@ -6,6 +6,8 @@ from stable_baselines import PPO2
 from stable_baselines.common.callbacks import BaseCallback
 from stable_baselines.bench import Monitor
 
+import os
+import numpy as np
 
 log_dir = "D:/Hmm/logs"
 env_id = "BattleFront2-v0"
