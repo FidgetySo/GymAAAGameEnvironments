@@ -56,7 +56,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
         return True
 
 env = gym.make(env_id)
-env = DummyVecEnv([lambda: env for _ in range(1)])
+env = DummyVecEnv([lambda: env])
 env = Monitor(env, log_dir)
 model = PPO2(CnnLstmPolicy, env, verbose=1, gamma=0.95, nminibatches=1, noptepochs=4, n_steps=128, cliprange=0.1, learning_rate=0.00075, tensorboard_log="D:/Hmm/tensorboard"   )
 callback = SaveOnBestTrainingRewardCallback(check_freq=1500, log_dir=log_dir)
