@@ -1,6 +1,6 @@
 import gym
 import gym_game
-
+from stable_baselines.results_plotter import load_results, ts2xy
 from stable_baselines.common.policies import CnnLstmPolicy
 from stable_baselines import PPO2
 from stable_baselines.common.callbacks import BaseCallback
